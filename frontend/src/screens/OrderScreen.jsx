@@ -44,6 +44,8 @@ const OrderScreen = () => {
   const deliverHandler = async () => {
     await deliverOrder(orderId);
     refetch();
+
+    toast.success('Order is Delivered');
   };
 
   return isLoading ? (

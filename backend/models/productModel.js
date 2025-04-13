@@ -31,6 +31,9 @@ const productSchema = mongoose.Schema(
       type: String,
       required: true,
     },
+    cloudinary_id: {  // Add this field to store Cloudinary public_id
+      type: String
+    },
     brand: {
       type: String,
       required: true,

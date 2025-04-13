@@ -1,4 +1,4 @@
-import { PRODUCTS_URL } from '../constants';
+import { PRODUCTS_URL, UPLOAD_URL } from '../constants';
 import { apiSlice } from './apiSlice';
 
 export const productsApiSlice = apiSlice.injectEndpoints({
@@ -19,11 +19,11 @@ export const productsApiSlice = apiSlice.injectEndpoints({
     }),
     createProduct: builder.mutation({
       query: (data) => ({
-        url:`${PRODUCTS_URL}`,
-        method:'POST',
-        body:data,
-    }),
-    invalidatesTags:['Product'],
+        url: `${PRODUCTS_URL}`,
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['Product'],
     }),
     updateProduct: builder.mutation({
       query: (data) => ({
@@ -33,11 +33,11 @@ export const productsApiSlice = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['Products'],
     }),
-    uploadProductImage: builder.mutation({
-      query: (data) => ({
-        url: `/api/upload`,
-        method: 'POST',
-        body: data,
+    // New signature endpoint for Cloudinary
+    getUploadSignature: builder.mutation({
+      query: () => ({
+        url: `${UPLOAD_URL}/signature`,
+        method: 'GET',
       }),
     }),
     deleteProduct: builder.mutation({
@@ -67,7 +67,7 @@ export const {
   useGetProductDetailsQuery,
   useCreateProductMutation,
   useUpdateProductMutation,
-  useUploadProductImageMutation,
+  useGetUploadSignatureMutation, // New export
   useDeleteProductMutation,
   useCreateReviewMutation,
   useGetTopProductsQuery,

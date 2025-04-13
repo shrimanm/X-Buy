@@ -1,5 +1,6 @@
 import asyncHandler from '../middleware/asyncHandler.js';
 import Product from '../models/productModel.js';
+import cloudinary from '../config/cloudinary.js';
 
 // @desc    Fetch all products
 // @route   GET /api/products
@@ -29,15 +30,10 @@ const getProducts = asyncHandler(async (req, res) => {
 // @route   GET /api/products/:id
 // @access  Public
 const getProductById = asyncHandler(async (req, res) => {
-  // NOTE: checking for valid ObjectId to prevent CastError moved to separate
-  // middleware. See README for more info.
-
   const product = await Product.findById(req.params.id);
   if (product) {
     return res.json(product);
   } else {
-    // NOTE: this will run if a valid ObjectId but no product was found
-    // i.e. product may be null
     res.status(404);
     throw new Error('Product not found');
   }
@@ -47,46 +43,79 @@ const getProductById = asyncHandler(async (req, res) => {
 // @route   POST /api/products
 // @access  Private/Admin
 const createProduct = asyncHandler(async (req, res) => {
-  const {name,price,image,brand,category,countInStock,description} = req.body
+  const {name, price, image, brand, category, countInStock, description} = req.body;
+  
+  let imageUrl = image;
+  let cloudinaryId = null;
 
-  const product = await Product.create({
-      name,
-      price,
-      user:req.user._id,
-      image,
-      brand,
-      category,
-      countInStock,
-      numReviews:0,
-      description,
-  })
-
-  if(product){
-      res.status(200).json(product)
-  }else{
-      res.status(401);
-      throw new Error('Product not created');
+  // Upload image to Cloudinary if file exists
+  if (req.file) {
+    try {
+      const result = await cloudinary.uploader.upload(req.file.path, {
+        folder: 'products',
+      });
+      imageUrl = result.secure_url;
+      cloudinaryId = result.public_id;
+    } catch (error) {
+      throw new Error('Image upload failed');
+    }
   }
 
+  const product = await Product.create({
+    name,
+    price,
+    user: req.user._id,
+    image: imageUrl,
+    cloudinary_id: cloudinaryId,
+    brand,
+    category,
+    countInStock,
+    numReviews: 0,
+    description,
+  });
+
+  if(product) {
+    res.status(201).json(product);
+  } else {
+    res.status(400);
+    throw new Error('Invalid product data');
+  }
 });
 
 // @desc    Update a product
 // @route   PUT /api/products/:id
 // @access  Private/Admin
 const updateProduct = asyncHandler(async (req, res) => {
-  const { name, price, description, image, brand, category, countInStock } =
-    req.body;
+  const { name, price, description, brand, category, countInStock } = req.body;
 
   const product = await Product.findById(req.params.id);
 
   if (product) {
-    product.name = name;
-    product.price = price;
-    product.description = description;
-    product.image = image;
-    product.brand = brand;
-    product.category = category;
-    product.countInStock = countInStock;
+    // Handle image update if new file is uploaded
+    if (req.file) {
+      try {
+        // Delete old image from Cloudinary if exists
+        if (product.cloudinary_id) {
+          await cloudinary.uploader.destroy(product.cloudinary_id);
+        }
+
+        // Upload new image
+        const result = await cloudinary.uploader.upload(req.file.path, {
+          folder: 'products',
+        });
+        product.image = result.secure_url;
+        product.cloudinary_id = result.public_id;
+      } catch (error) {
+        throw new Error('Image update failed');
+      }
+    }
+
+    product.name = name || product.name;
+    product.price = price || product.price;
+    product.description = description || product.description;
+    product.brand = brand || product.brand;
+    product.category = category || product.category;
+    product.countInStock = countInStock || product.countInStock;
 
     const updatedProduct = await product.save();
     res.json(updatedProduct);
@@ -103,8 +132,17 @@ const deleteProduct = asyncHandler(async (req, res) => {
   const product = await Product.findById(req.params.id);
 
   if (product) {
-    await Product.deleteOne({ _id: product._id });
-    res.json({ message: 'Product removed' });
+    try {
+      // Delete image from Cloudinary if exists
+      if (product.cloudinary_id) {
+        await cloudinary.uploader.destroy(product.cloudinary_id);
+      }
+
+      await Product.deleteOne({ _id: product._id });
+      res.json({ message: 'Product removed' });
+    } catch (error) {
+      throw new Error('Error deleting product image');
+    }
   } else {
     res.status(404);
     throw new Error('Product not found');
@@ -137,9 +175,7 @@ const createProductReview = asyncHandler(async (req, res) => {
     };
 
     product.reviews.push(review);
-
     product.numReviews = product.reviews.length;
-
     product.rating =
       product.reviews.reduce((acc, item) => item.rating + acc, 0) /
       product.reviews.length;
@@ -157,7 +193,6 @@ const createProductReview = asyncHandler(async (req, res) => {
 // @access  Public
 const getTopProducts = asyncHandler(async (req, res) => {
   const products = await Product.find({}).sort({ rating: -1 }).limit(3);
-
   res.json(products);
 });
 
